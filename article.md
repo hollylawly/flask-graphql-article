@@ -1,7 +1,7 @@
 
 # What We're Going to Build
 
-In this article we're going to demonstrate how we can use Flask to build a GraphQL API that can create and return **flexible and meaningful data**. First we'll setup our backend using Flask and an SQLite database. Next we'll bring in GraphQL to build an API that will allow us to interact with quidditch teams, players, and games. Finally we'll show how we can use two different **authorization models** to extend permissions to players from the Auth0 dashboard.
+In this article we're going to demonstrate how we can use **Flask** to build a **GraphQL API** that can create and return **flexible and meaningful data**. First we'll setup our backend using Flask and an SQLite database. Next we'll bring in GraphQL to build an API that will allow us to interact with quidditch teams, players, and games. Finally we'll demonstrate the value this graph-based database modeling can bring to our application by testing out two different **authorization models** to extend permissions to players from the Auth0 dashboard.
 
 All code for this application can be found [on GitHub](https://github.com/hollylawly/graphql-flask-quidditch-manager). If you want to jump right in, just clone the repository and follow the instructions in the README to run the application.
 
@@ -304,7 +304,13 @@ pip install flask-graphql graphene graphene-sqlalchemy
 
 Next let's create our schema. The schema is going to represent the graph-like **structure of our data** so that GraphQL can know how to map it. 
 
-Instead of the traditional tabular structure of data, imagine we have a **graph** of data. Each square in the image below represents a **node** and each line connecting them is considered and **edge**. Each node will also have attributes associated with it. In this case we can see some of the `position` attributes such as Captain and Seeker, represented as ovals. 
+Instead of the traditional tabular structure of data, imagine we have a **graph** of data. Each square in the image below represents a **node** and each line connecting them is considered and **edge**. 
+
+**Node** - A node in a graph represents the data item itself, e.g. a player, game, or team
+
+**Edge** - An edge connects 2 nodes and represents the *relationship* between them, e.g. a player belongs to a team
+
+Each node will also have attributes associated with it. In this case we can see some of the `position` attributes such as Captain and Seeker, represented as ovals. 
 
 ![](images/graph-structure.png)
 
@@ -403,23 +409,23 @@ schema = graphene.Schema(query=Query)
 
 ```
 
-So what's going on here? We're adding some more complex queries that can't just rely on the models above to display their data. 
+So what's going on here? We're adding some more complex queries that can't just rely on the models above to display their data. For example, we're expecting GraphQL to get all games a team has played, but we haven't told it how to do that. We have to create **resolvers** that will work with our SQLite database and get that information to be added to the graph. 
 
-**get_player**
+### get_player
 
 This will allow us to request any **single** player by name. We're passing in the `PlayerObject`, so we'll have access to all attributes for that player. 
 
 Now we just need to setup a function to **resolve** that player, meaning the actually query we do on the database to get them. We're just searching the `player` table until we find a player whose `name` is equal to the one we passed in.
 
-**get_game**
+### get_game
 
 This is similary to get player, except here we're getting a single game by `id`.
 
-**get_team_games**
+### get_team_games
 
 Here we're requesting data about all games played by a certain team. We're going to allow the client to pass in a team's `id` and from there they can request any information they'd like about games that team has either won or lost. When we resolve that query, we're just searching the database for any games where the team's id matches the `winner_id` or `loser_id`. Also note back in the `get_team_games` variable, we need to specify that we want a `List` of games instead of just one.
 
-**get_position**
+## get_position
 
 Our final query will allow the client to specify a player's `position` and then we'll return back all player's who match that position.
 
@@ -459,10 +465,9 @@ Let's test out one of our initial queries now.
 
 **Get all players by name**
 
-Think back to that graph of our data that we had above. To get all players, first we need to walk along all the lines in the graph (edges) that point to each player (nodes). Once we hit a node, we have access to all attributes of that node that were defined in our schema, which is this case is everything. 
+Think back to that graph of our data that we had above. To get all players, first we need to walk along all the lines in the graph (edges) that point to each player (nodes). Once we hit a node, we have access to all attributes of that node that were defined in our schema, which is this case is everything. Note that by convention, when we're making GraphQL queries we have to use camel case.  
 
 ![](images/all-players-basic-query.png)
-
 
 > In a normal REST API, if you did a query to get a user it might return a lot of unnecessary attributes about the user. With GraphQL, we can request exactly what we **want**.
 
@@ -498,11 +503,13 @@ Now that we've created a GraphQL API, let's check out how we can pair our data w
 
 ## Comparison of Common Authorization Models
 
-As mentioned at the beginning of this article, there are a few different ways we can authorize a user to have certain permissions in an application. We're going to focus on two of those: **Attribute based Access Control** and **Relationship Based Access Control**.
+As mentioned at the beginning of this article, there are a few different ways we can authorize a user to have certain permissions in an application. The most widely used one is **role based access control**, which is where we have a user and we assign it roles. The roles then dictate the permissions that user has. This structure works fine for small simple applications, but a lot of larger applications make authorization decisions that rely heavily on either attributes of a user or the relationships a user has to data. So how do we do that *without* creating roles? Let's find out.
+
+In this example we're going to focus on two different authorization models: **Attribute based Access Control** and **Relationship Based Access Control**.
 
 ## Creating an ABAC Rule
 
-Attribute based access control means we're authorizing our user to have access to something based on a trait associated with that user. 
+Attribute based access control means we're authorizing our user to have access to something **based on a trait associated with that user**. 
 
 In our quidditch example, let's say our application has special forums where all players that play a certain position can chat with each other. For example, every player with `position` equal to "Seeker" will be able to access the Seeker's forum and only the Seeker's forum. It doesn't matter what team they're on, as long as they all play the same position.
 
