@@ -525,33 +525,147 @@ Click on "Rules" on the left-hand side.
 
 Press "Create Rule" and let's make a rule that will extend a "seeker_chat" permission to all players with `position` Seeker.
 
-IMAGE HERE
+```js
+// See if the user is authorized to enter the seeker chat
+// If so, give them chat permissions
 
-Now if we click "Try this rule", we'll see what it would look like if a mock user logs into our application.
+function (user, context, callback) {
+  
+  const axios = require('axios');
+  const name = user.name;
+  
+  axios({
+    url: 'https://e709d1d2.ngrok.io/graphql',
+    method: 'post',
+    data: {
+      query: `
+        {
+          getPlayer(name: "${name}") {
+            name
+            position
+            teamName {
+            name
+            }
+          }
+        }
+        `
+    }
+   }).then((result) => {      
+      if (result.data.data.getPlayer.position === 'Seeker') {
+        context.accessToken.scope = context.accessToken.scope || [];
+        context.accessToken.scope.push(['seeker_chat']);
+        return callback(null, user, context);
+      } else
+        return callback(new UnauthorizedError('Access denied.'));
+    }).catch(err => {
+      return callback(err);
+    });  
+}
 
-**Our user before logging in**
+```
 
-Notice that the `accessToken` scope is currently empty.
+First we're going to require **axios** so we can make the call to our GraphQL API. We have access to the user who's trying to access the chat through the `user` variable. Let's just grab the name from the user and pass that into our `getPlayer` query. 
 
-IMAGE HERE
+Next we just need to wait for this response and when it comes back, check if that user's `position` is "Seeker". If so, we push the `seeker_chat` permission onto their access token's scope.
 
-**After we login**
+Let's test that this works. Click "Try this rule" and we can run the rule with a mock user.
 
-Now our user is returned and a `seeker_chat` permission has been added to the access token's scope.
+### Our user before logging in
 
-IMAGE HERE
+This is what the **user object** looks like before logging in. We have our user's basic information like `id` and `name`. Then in the next image we can see the user's **context object**, which holds information about the authentication transaction. Notice that the `accessToken` scope is currently empty. Click "Try" so we can run this rule against this user.
 
-**Denying a user**
+![](images/seeker-chat-user-before.png)
+![](images/seeker-chat-context-before.png)
 
-Just for good measure, let's make sure that we're only extending this permission to player's with the Seeker position.
+### After Logging In
 
-IMAGE HERE
+Now our user is returned and if you look at the context object, we can see a `seeker_chat` permission has been added to the access token's scope.
+
+![](images/seeker-chat-context-after.png)
+
+### Denying a User
+
+Just for good measure, let's make sure that we're only extending this permission to player's with the Seeker position. Change the user's name to "Oliver Wood", who is a Captain, and run the rule.
+
+![](images/seeker-chat-user-denied.png)
+![](images/seeker-chat-denied-message.png)
 
 The user is denied, just as we were expecting.
 
 ## Creating a ReBAC Rule
- 
 
+Next up, let's create our relationship based rule. 
+
+For this scenario, let's say a user is trying to gain access to information about a particular game. And let's just imagine that the game results are supposed to be a secret to everyone **except the users on the winning team of that game**. 
+
+We need to create a rule that steps in front of the user when they try to access the game data and checks if they were the winner of that game. We'll run the `getGame` query and check if the `winnerId` matches the `team_id` of the user trying to access it. 
+
+Create a new rule with the following:
+
+```js
+function (user, context, callback) {
+  
+  const axios = require('axios');
+  const gameId = 8;
+  
+  // If no user, deny them access
+  if (! user.id)
+    return callback(new UnauthorizedError('Access denied. Please login.'));
+  
+  axios({
+    url: 'https://e709d1d2.ngrok.io/graphql',
+    method: 'post',
+    data: {
+      query: `
+        {
+          getGame(id: ${gameId}) {
+            level
+            winnerId
+            loserId
+            child {
+              level
+              winnerId
+            }
+          }
+        }
+      `
+    }
+   }).then((result) => {
+        // Check that the user's team_id matches the winnerId of the game 
+        if (user.team_id === result.data.data.getGame.winnerId) {
+        // Add the game info to the context object, just to make sure it's working
+        context.gameInfo = result.data.data.getGame;
+        return callback(null, user, context);
+      } else
+        return callback(new UnauthorizedError('You are not authorized to see this.'));
+    }).catch(err => {
+      return callback(err);
+    });
+  
+}
+```
+
+### Before Logging In
+
+Zacharias Smith is requesting access to the game data. He's on team Ravenclaw (`team_id` of 4), which matches the `winnerId` of the game. We expect him to gain access and have the `gameInfo` object added to the user context.
+
+![](images/game-winner-user.png)
+
+### After Logging In
+
+Zacharias Smith is in!
+
+![](images/get-team-games-query-children.png)
+
+### Denying a User
+
+Again, let's check the case that a user who *shouldn't* have access tries tries to view the game. Harry Potter, who has `team_id` 1, should not be able to access this game.
+
+![](images/game-user-denied-before.png)
+
+![](images/game-user-denied-after.png)
+
+Just as we were expecting, Harry Potter is denied access.
 
 # Wrap Up
 
