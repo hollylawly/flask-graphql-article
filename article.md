@@ -419,7 +419,7 @@ Now we just need to setup a function to **resolve** that player, meaning the act
 
 ### get_game
 
-This is similary to get player, except here we're getting a single game by `id`.
+This is similar to get player, except here we're getting a single game by `id`.
 
 ### get_team_games
 
@@ -598,7 +598,9 @@ Next up, let's create our relationship based rule.
 
 For this scenario, let's say a user is trying to gain access to information about a particular game. And let's just imagine that the game results are supposed to be a secret to everyone **except the users on the winning team of that game**. 
 
-We need to create a rule that steps in front of the user when they try to access the game data and checks if they were the winner of that game. We'll run the `getGame` query and check if the `winnerId` matches the `team_id` of the user trying to access it. 
+We need to create a rule that steps in front of the user when they try to access the game data and checks if they were the winner of that game. We'll run the `getGame` query and check if the `winnerId` matches the `team_id` of the user trying to access it. This is the query and the data that we're trying to protect:
+
+![](images/get-game-single-query.png)
 
 Create a new rule with the following:
 
