@@ -19,11 +19,16 @@ Attribute-based access control means we're authorizing our user to have access t
 
 ### Relationship-based Access Control (ReBAC)
 
-Relationship-based access control is where we allow access to something **based on how that data relates to other data**. In the blog example, we might want to allow a guest author access to the posts section of the dashboard, but **only** let them view and edit posts that they wrote. In this case, we need to **check the relationship** between a post and the user before allowing access. Usually we'll have an `author` field on the post that will link back to the `id` field of a user.
+Relationship-based access control is where we allow access to something **based on how that data relates to other data**. In the blog example, we might want to allow a guest author access to the posts section of the dashboard, but **only** let them view and edit posts that they wrote. In this case, we need to **check the relationship** between a post and the user before allowing access. Usually we'll have an `author_id` field on the post that will link back to the `id` field of a user. If that relationship exists, we can grant post editing access for that user. If not, we can simply deny them on the spot.
 
-So what does this have to do with a graph structured data? Modeling our data in a graph-like structure is a great way to bring flexibility to our data and really take advantage of **relationships**.  
+![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/graph-rebac.png)
 
-![](images/graph-rebac.png)
+So **what does this have to do with a graph structured data**? Modeling our data in a graph-like structure is a great way to bring flexibility to our data and really make **relationships** the top priority. As applications become increasingly complex, it gets much harder to manage roles and permissions. 
+
+Think of an application as massive as Facebook. You allow your profile to be viewed by **your friends** and also **friends of friends**. Some user clicks to view your profile, so now Facebook needs to run a query to search through all of that person's friends and then search all of friends of those friends before it can authorize them to view your profile. That's a lot of work! By modeling these relationships in a graph, we can just select out any point in the graph and "hop" to the next data point to see that relationship. Then we just define [rules](https://auth0.com/docs/rules) that use those relationships or data attributes to make authorization decisions. That's exactly what we're going to do in this article.
+
+![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/fb-access-example.png)
+
 
 ## Why Flask and GraphQL
 
@@ -38,6 +43,26 @@ Some notable features:
 - It can be used with any language or database
 - Can be used on top of existing REST APIs
 - Gives the client side more control
+
+## Prerequisites
+
+Because Flask is a web framework for Python, we need to have Python on our machines. 
+
+You can check if it's installed on your system by opening your terminal and running:
+
+```bash
+python --version
+```
+
+If a version is not returned, you're going to need to download and install the latest version from the [Python website](https://www.python.org/downloads/). For this tutorial, we'll be using Python 3.
+
+Next we're going to be using **Pip**, which is a package manager for Python, similar to npm. If you downloaded a recent version of Python 3 (3.4 or higher), pip should have been installed with it. If not, you can install it [here](https://pip.pypa.io/en/stable/installing/).
+
+You can double check if it's installed with:
+
+```bash
+pip --version
+```
 
 ## Setting Up our Application
 
@@ -54,14 +79,6 @@ touch app.py
 ```
 
 You can open your preferred code editor now and let's get started with Python.
-
-### Installing Python and pip
-
-Because Flask is a web framework for Python, we're going to need to install Python. 
-
-You can download the latest version for your system from the [Python website](https://www.python.org/downloads/). For this tutorial, we'll be using Python 3. 
-
-Next we're going to be using **Pip**, which is a package manager for Python similar to npm. If you downloaded a recent version of Python 3 (3.4 or higher), pip should have been installed with it. If not, you can install it [here](https://pip.pypa.io/en/stable/installing/).
 
 ### Creating a Virtual Environment
 
@@ -94,7 +111,7 @@ env\Scripts\activate
 If you're on Mac or Linux use:
 
 ```bash
-env/bin/activate
+. env/bin/activate
 ```
 
 Your terminal should now look similar to this:
@@ -113,7 +130,7 @@ Now that we have a virtual environment to store our dependencies, we're finally 
 pip install flask
 ```
 
-You should now see a flask folder inside `env/Lib/site-packages`. 
+This creates a `site-packages` folder nested inside your `env` folder. 
 
 Now let's setup a basic skeleton app. Open up your empty `app.py` file and paste in the following:
 
@@ -247,7 +264,7 @@ Here's the basic flow of what we're doing:
 
 These classes are basically the lifeblood of our database. When we create our database in the next step, it's going to setup the tables and columns exactly how we told it to in this file. 
 
-Just a quick sidenote, you may have noticed in the `teams` table we have a `players` column that's using `db.relationship()`. This is how we create a **one to many relationship** using SQLAlchemy. All we're saying is that one team can have many players, but a player can only belong to one team. You can learn more about creating relationships in SQLAlchemy ![in this article](https://auth0.com/blog/sqlalchemy-orm-tutorial-for-python-developers/).  
+Just a quick sidenote, you may have noticed in the `teams` table we have a `players` column that's using `db.relationship()`. This is how we create a **one to many relationship** using SQLAlchemy. All we're saying is that one team can have many players, but a player can only belong to one team. These relationships are important to define now so that we can model them in our graph later. You can learn more about creating relationships in SQLAlchemy [in this article](https://auth0.com/blog/sqlalchemy-orm-tutorial-for-python-developers/).  
 
 ## Creating and Seeding our Database
 
