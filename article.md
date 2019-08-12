@@ -599,9 +599,9 @@ Now that we've created our GraphQL API, we can use that flexible data to impleme
 
 ### Creating an ABAC Rule
 
-Attribute based access control means we're authorizing our user to access something **based on an attribute of that user**. 
+Attribute based access control means we're authorizing our user to access something **based on an attribute of that user, resources, or the request at hand.**. 
 
-In our quidditch example, let's say our application has special forums where all players that play a certain position can chat with each other. For example, every player with `position` equal to "Seeker" will be able to access the Seeker's forum and only the Seeker's forum. It doesn't matter what team they're on, as long as they all play the same position.
+In our quidditch example, let's say our application has special forums where all players with certain attributes can chat with each other. For example, every player who is in the same `year` at Hogwarts will be able to access the chat for their year. It doesn't matter what team they're on, as long as they have the same value for `year`.
 
 We can actually create this rule pretty easily through the Auth0 dashboard. Let's see it in action.
 
@@ -613,11 +613,10 @@ Click on "Rules" on the left-hand side.
 
 [Auth0 rules](https://auth0.com/docs/rules) are special functions you can create that will run whenever a user logs into your application. They allow us to add information to a user's profile, ban specific users based on certain attributes, extend permissions to users, and more.
 
-Press "Create Rule" and let's make a rule that will extend a "seeker_chat" permission to all players with `position` Seeker.
+Press "Create Rule" and let's make a rule that will extend a chat permission to a user based on what year they're in at Hogwarts.
 
 ```js
-// See if the user is authorized to enter the seeker chat
-// If so, give them chat permissions
+// Give the user permissions to access the chat for their year
 
 function (user, context, callback) {
   
@@ -625,7 +624,7 @@ function (user, context, callback) {
   const name = user.name;
   
   axios({
-    url: 'https://e709d1d2.ngrok.io/graphql',
+    url: 'https://d4df6690.ngrok.io/graphql',
     method: 'post',
     data: {
       query: `
@@ -633,30 +632,29 @@ function (user, context, callback) {
           getPlayer(name: "${name}") {
             name
             position
-            onTeam {
-            name
-            }
+            year
           }
         }
         `
     }
    }).then((result) => {      
-      if (result.data.data.getPlayer.position === 'Seeker') {
+      if (result.data.data.getPlayer.year) {
+        let playerYear = result.data.data.getPlayer.year;
         context.accessToken.scope = context.accessToken.scope || [];
-        context.accessToken.scope.push(['seeker_chat']);
+        context.accessToken.scope.push([`year_${playerYear}_chat`]);
         return callback(null, user, context);
       } else
         return callback(new UnauthorizedError('Access denied.'));
     }).catch(err => {
       return callback(err);
-    });  
+    });
 }
 
 ```
 
 First we're going to require **axios** so we can make the call to our GraphQL API. We have access to the user who's trying to access the chat through the `user` variable. Let's just grab the name from the user and pass that into our `getPlayer` query. Of course in the real world we wouldn't use `name` since that isn't unique, but this example is just for demonstration.
 
-Next we just need to wait for this response and when it comes back, check if that user's `position` is "Seeker". If so, we push the `seeker_chat` permission onto their access token's scope.
+Next we just need to wait for this response and when it comes back, check if that user has a year set. If so, we push the permission for access to that year's chat onto their access token's scope.
 
 Let's test that this works. Click "Try this rule" and we can run the rule with a mock user.
 
