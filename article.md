@@ -220,7 +220,7 @@ class Team(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(50))
     rank = Column(Integer, nullable=False)
-    players = relationship('Player', backref='team_name', lazy=True)
+    players = relationship('Player', backref='on_team', lazy=True)
 
     def __repr__(self):
         return '<Team %r>' % self.name
@@ -300,12 +300,12 @@ This is the process we'll use to add any new row into a table. We're just callin
 Let's add our first player as well. We've already imported the classes, so we don't need to do it again.
 
 ```bash
-player1 = Player(name='Harry Potter', position='Seeker', team_name=team1)
+player1 = Player(name='Harry Potter', position='Seeker', on_team=team1)
 db_session.add(player1)
 db_session.commit()
 ```
 
-You may have noticed that for the last attribute we called it `team_name` when the column is called `team_id`. Because we've already defined a relationship between the players table and teams table, we can actually just use that backref we created earlier and assign it to the `team1` variable we just created for the Gryffindor team. That way we don't have to go through the trouble of looking up what id Gryffindor was assigned. Pretty neat!
+You may have noticed that for the last attribute we called it `on_team` when the column is called `team_id`. Because we've already defined a relationship between the players table and teams table, we can actually just use that backref we created earlier and assign it to the `team1` variable we just created for the Gryffindor team. That way we don't have to go through the trouble of looking up what id Gryffindor was assigned. Pretty neat!
 
 To exit Python, just press `ctrl` + `Z` and hit `enter`.
 
@@ -519,7 +519,7 @@ Let's look at another example to demonstrate this.
       node {
         name
         position
-        teamName {
+        onTeam {
           name
           rank
         }
@@ -529,7 +529,7 @@ Let's look at another example to demonstrate this.
 }
 ```
 
-This time we're going to request all players with their name, position, and team name. We're able to access `teamName` because back when we setup our models, we defined a relationship between `teams` and `players` where we created that pseudo-column on the `players` table. This is how we can use it now! Instead of just getting back an `id`, we can request the name directly.
+This time we're going to request all players with their name, position, and team name. We're able to access `onTeam` because back when we setup our models, we defined a relationship between `teams` and `players` where we created that pseudo-column on the `players` table. This is how we can use it now! Instead of just getting back an `id`, we can request the name directly.
 
 ![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/graphql-players-query.png)
 
@@ -540,7 +540,7 @@ query {
   getPlayer(name: "Harry Potter") {
     name
     position
-    teamName {
+    onTeam {
       name
       rank
     }
@@ -558,7 +558,7 @@ GraphQL also lets you pass in arguments. This time we just want a single player 
 query {
   getPosition(position: "Seeker") {
     name
-    teamName {
+    onTeam {
       name
     }
   }
@@ -633,7 +633,7 @@ function (user, context, callback) {
           getPlayer(name: "${name}") {
             name
             position
-            teamName {
+            onTeam {
             name
             }
           }
