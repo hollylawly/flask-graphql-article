@@ -231,6 +231,7 @@ class Player(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(50), nullable=False)
     position = Column(String(50), nullable=False)
+    year = Column(Integer, nullable=False)
     team_id = Column(Integer, ForeignKey('teams.id'), nullable=False)
 
     def __repr__(self):
@@ -300,7 +301,7 @@ This is the process we'll use to add any new row into a table. We're just callin
 Let's add our first player as well. We've already imported the classes, so we don't need to do it again.
 
 ```bash
-player1 = Player(name='Harry Potter', position='Seeker', on_team=team1)
+player1 = Player(name='Harry Potter', position='Seeker', year=1, on_team=team1)
 db_session.add(player1)
 db_session.commit()
 ```
@@ -658,7 +659,7 @@ Next we just need to wait for this response and when it comes back, check if tha
 
 Let's test that this works. Click "Try this rule" and we can run the rule with a mock user.
 
-#### Our user before logging in
+#### Our user during login
 
 This is what the **user object** looks like before logging in. We have our user's basic information like `id` and `name`. Then in the next image we can see the user's **context object**, which holds information about the authentication transaction. Notice that the `accessToken` scope is currently empty. Click "Try" so we can run this rule against this user.
 
@@ -667,95 +668,85 @@ This is what the **user object** looks like before logging in. We have our user'
 
 #### After Logging In
 
-Now our user is returned and if you look at the context object, we can see a `seeker_chat` permission has been added to the access token's scope.
+Now our user is returned and if you look at the context object, we can see a `year_2_chat` permission has been added to the access token's scope.
 
 ![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/seeker-chat-context-after.png)
 
 #### Denying a User
 
-Just for good measure, let's make sure that we're only extending this permission to player's with the Seeker position. Change the user's name to "Oliver Wood", who is a Captain, and run the rule.
-
-![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/seeker-chat-user-denied.png)
-![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/seeker-chat-denied-message.png)
-
-The user is denied, just as we were expecting.
+This is a quick way to grant permissions dynamically. We can setup our app so that in order to access a certain year's chatroom, you must have the correct permission for that year. So if a player in her 3rd year tries to access Year 2 Chat, she will be denied. 
 
 ### Creating a ReBAC Rule
 
 Next up, let's create our relationship based rule. 
 
-For this scenario, let's say a user is trying to gain access to information about a particular game. And let's just imagine that the game results are supposed to be a secret to everyone **except the users on the winning team of that game**. 
+For this scenario, let's imagine that we need to restrict view access of player's profiles based on what team they're on. 
 
-We need to create a rule that steps in front of the user when they try to access the game data and checks if they were the winner of that game. We'll run the `getGame` query and check if the `winnerId` matches the `team_id` of the user trying to access it. This is the query and the data that we're trying to protect:
+**A player can see the profile's of every other player on their team, but no one else.**
 
-![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/get-game-single-query.png)
+We want to create a rule that jumps in after a user logs in and determines what players the user will be able to see. 
+
+First we'll run the `getPlayer` query for the user that's logging in. In that query, we'll use the `onTeam` relationship to pull what team the user is on. From there we can use the `players` relationship to grab all of the players that are on that team. This is the query and the data that we're going to use to determine what the user can access:
+
+![](images/get-player-teammates.png)
 
 Create a new rule with the following:
 
 ```js
 function (user, context, callback) {
-  
   const axios = require('axios');
-  const gameId = 8;
   
-  // If no user, deny them access
   if (! user.id)
     return callback(new UnauthorizedError('Access denied. Please login.'));
   
   axios({
-    url: 'https://e709d1d2.ngrok.io/graphql',
+    url: 'https://4ee74187.ngrok.io/graphql',
     method: 'post',
     data: {
       query: `
         {
-          getGame(id: ${gameId}) {
-            level
-            winnerId
-            loserId
-            child {
-              level
-              winnerId
+          getPlayer(name: "${user.name}") {
+            name
+            onTeam {
+              name
+              players {
+                edges {
+                  node {
+                    name
+                    position
+                    year
+                  }
+                }
+              }
             }
           }
         }
       `
     }
-   }).then((result) => {
-        // Check that the user's team_id matches the winnerId of the game 
-        if (user.team_id === result.data.data.getGame.winnerId) {
-        // Add the game info to the context object, just to make sure it's working
-        context.gameInfo = result.data.data.getGame;
+   }).then((result) => {      
+      if (result.data.data.getPlayer.onTeam) {        
+        context.viewablePlayers = result.data.data.getPlayer.onTeam.players.edges;
         return callback(null, user, context);
       } else
-        return callback(new UnauthorizedError('You are not authorized to see this.'));
+        return callback(new UnauthorizedError('Please join a team to see players.'));
     }).catch(err => {
       return callback(err);
-    });
-  
+    });  
 }
 ```
 
-#### Before Logging In
+#### Before/During login
 
-Zacharias Smith is requesting access to the game data. He's on team Ravenclaw (`team_id` of 4), which matches the `winnerId` of the game. We expect him to gain access and have the `gameInfo` object added to the user context.
+Harry Potter signs into his dashboard. The rule runs and just for demonstration purposes we'll add his list of viewable players to the context object.
 
-![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/game-winner-user.png)
+![](images/player-teams-user-before.png)
+![](images/player-teams-context-before.png)
 
 #### After Logging In
 
-Zacharias Smith is in!
+Harry Potter is in and now has access to these teammates:
 
-![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/get-team-games-query-children.png)
-
-#### Denying a User
-
-Again, let's check the case that a user who *shouldn't* have access tries tries to view the game. Harry Potter, who has `team_id` 1, should not be able to access this game.
-
-![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/game-user-denied-before.png)
-
-![](https://raw.githubusercontent.com/hollylawly/flask-graphql-article/master/images/game-user-denied-after.png)
-
-Just as we were expecting, Harry Potter is denied access.
+![](images/player-teams-context-after.png)
 
 ## Wrap Up
 
